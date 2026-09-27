@@ -1,5 +1,5 @@
 import * as THREE from './three.module.js';
-import {biomeAt,terrainHeight,createHealth,damage,regenerate,canMine,standing,findPath,createExposure,tickExposure,touchesCactus,isUnderwater,traceBlocks,blockOverlapsBody} from './survival.mjs';
+import {biomeAt,terrainHeight,createHealth,damage,regenerate,canMine,standing,findPath,createExposure,tickExposure,touchesCactus,isUnderwater,traceBlocks,blockOverlapsBody} from './survival.mjs?v=20260926-r3';
 const $=s=>document.querySelector(s),canvas=$('#game');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:false});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.setClearColor(0xa5d4e4);renderer.outputColorSpace=THREE.SRGBColorSpace;
 const scene=new THREE.Scene();scene.fog=new THREE.Fog(0xa5d4e4,38,85);const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.05,140);camera.rotation.order='YXZ';
@@ -51,14 +51,14 @@ $('#inventoryButton').onclick=openInventory;
 function healthUI(){ $('#hearts').innerHTML=Array.from({length:10},(_,i)=>`<span class="heart ${health.hp>=i*2+2?'full':health.hp===i*2+1?'half':'empty'}"></span>`).join('');$('#hearts').setAttribute('aria-label',`${health.hp} of 20 health`);$('#healthNote').textContent=health.hp===20?'FULL HEALTH':health.sinceHit<4?'RECOVERING…':'REGENERATING'; }
 ui();equip();healthUI();let toastTimer;
 function toast(msg){$('#toast').textContent=msg;$('#toast').style.opacity=1;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').style.opacity=0,2300)}
-function start(){active=true;$('#overlay').classList.add('hidden');if(!matchMedia('(pointer:coarse)').matches){try{const p=canvas.requestPointerLock();p?.catch(()=>toast('Drag to look, or use arrow keys.'))}catch{toast('Drag to look, or use arrow keys.')}}}
+function start(){Object.keys(keys).forEach(k=>keys[k]=false);canvas.focus();active=true;$('#overlay').classList.add('hidden');if(!matchMedia('(pointer:coarse)').matches){try{const p=canvas.requestPointerLock();p?.catch(()=>toast('Drag to look, or use arrow keys.'))}catch{toast('Drag to look, or use arrow keys.')}}}
 function pause(){inventoryOpen=false;$('#inventory').classList.add('hidden');active=false;placing=false;breaking=false;Object.keys(keys).forEach(k=>keys[k]=false);document.exitPointerLock?.();$('#overlay').classList.remove('hidden');$('#play').innerHTML='RESUME WORLD <span>→</span>'}
 $('#play').onclick=start;$('#pause').onclick=pause;
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&active)pause()});
 document.addEventListener('keydown',e=>{if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();keys[e.code]=true;if(e.code==='KeyE'&&!e.repeat){e.preventDefault();if(inventoryOpen)closeInventory();else openInventory()}if(e.code==='Escape'){if(inventoryOpen)closeInventory();else pause()}if(inventoryOpen&&e.code==='Tab'){const buttons=[...$('#inventory').querySelectorAll('button')];const first=buttons[0],last=buttons.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}if(/^Digit[1-8]$/.test(e.code))select(+e.code.slice(-1)-1)});
 document.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{if(active)pause()});
 let dragging=false;
-document.addEventListener('mousedown',e=>{if(active&&e.button===2&&!e.target.closest('button')){e.preventDefault();placing=true;placeCooldown=.18;place()}});
+document.addEventListener('mousedown',e=>{if(active&&e.button===2&&!e.target.closest?.('button')){e.preventDefault();placing=true;placeCooldown=.18;place()}});
 document.addEventListener('contextmenu',e=>{if(active)e.preventDefault()});
 canvas.addEventListener('pointerdown',e=>{if(!active)return;if(e.pointerType==='touch'){dragging=true;canvas.setPointerCapture(e.pointerId)}else if(e.button===0){breaking=true;if(inventory[selected]==='sword')primary()}});
 document.addEventListener('mouseup',e=>{if(e.button===2)placing=false});
@@ -75,12 +75,13 @@ function place(){
  camera.position.copy(pos).add(new THREE.Vector3(0,1.62,0));camera.rotation.set(pitch,yaw,0);target=aim();
  const t=inventory[selected];
  if(typeof t!=='number')return toast('Press E to choose a block for your hotbar.');
- if(!target?.last)return;
+ if(!target?.last)return toast('Aim at a block face within reach to place.');
  if(!counts[t])return toast('Break blocks to collect more.');
  const [x,y,z]=target.last;
  if(y<0||y>=256||x< -48||x>=48||z< -48||z>=48)return toast('World boundary reached.');
  if(get(x,y,z))return;
- if(blockOverlapsBody(target.last,pos.toArray())||(zombie&&blockOverlapsBody(target.last,zombie.pos.toArray(),.4,1.95)))return;
+ if(blockOverlapsBody(target.last,pos.toArray()))return toast('Step back or jump to make room for this block.');
+ if(zombie&&blockOverlapsBody(target.last,zombie.pos.toArray(),.4,1.95))return toast('A zombie is in the way.');
  updateBlock(x,y,z,t);if(zombie)zombie.repath=0;counts[t]--;ui();sound(150,.04);
 }
 let audio;function sound(freq,duration){try{audio??=new AudioContext();const o=audio.createOscillator(),g=audio.createGain();o.type='square';o.frequency.setValueAtTime(freq,audio.currentTime);o.frequency.exponentialRampToValueAtTime(freq*.4,audio.currentTime+duration);g.gain.setValueAtTime(.035,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+duration)}catch{}}
@@ -114,7 +115,20 @@ function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/10
  if(active){elapsed+=dt;actionCooldown=Math.max(0,actionCooldown-dt);swing=Math.max(0,swing-dt);damageFlash=Math.max(0,damageFlash-dt);
   if(keys.ArrowLeft)yaw+=dt*1.8;if(keys.ArrowRight)yaw-=dt*1.8;if(keys.ArrowUp)pitch=Math.min(1.5,pitch+dt*1.4);if(keys.ArrowDown)pitch=Math.max(-1.5,pitch-dt*1.4);
   let dx=(+!!keys.KeyD)-(+!!keys.KeyA),dz=(+!!keys.KeyS)-(+!!keys.KeyW),len=Math.hypot(dx,dz)||1,speed=keys.ShiftLeft?7:4.4;dx/=len;dz/=len;const vx=(dx*Math.cos(yaw)+dz*Math.sin(yaw))*speed,vz=(-dx*Math.sin(yaw)+dz*Math.cos(yaw))*speed;
-  for(const [axis,v]of [['x',vx],['z',vz]]){const steps=Math.max(1,Math.ceil(Math.abs(v*dt)/.04));for(let i=0;i<steps;i++){const old=pos[axis];pos[axis]+=v*dt/steps;if(collision(pos)||Math.abs(pos[axis])>46.8){pos[axis]=old;break}}}
+  for(const [axis,v]of [['x',vx],['z',vz]]){const steps=Math.max(1,Math.ceil(Math.abs(v*dt)/.04));for(let i=0;i<steps;i++){const old=pos[axis];pos[axis]+=v*dt/steps;if(Math.abs(pos[axis])>46.8){pos[axis]=old;break}
+   if(collision(pos)){
+    // At the surface, swim onto a low ledge without needing the lake bed.
+    let climbed=false;
+    if(keys.Space&&pos.y<5.25){
+     const nearSurface=pos.y+.8>=4.95;
+     const maxRise=nearSurface?1.85:1.01;
+     for(let top=Math.floor(pos.y+.001)+1;top<=6&&top-pos.y<=maxRise;top++){
+      const ledge=pos.clone();ledge.y=top;
+      if(!collision(ledge)&&collision(ledge.clone().add(new THREE.Vector3(0,-.05,0)))){pos.copy(ledge);vy=Math.max(0,vy);climbed=true;break}
+     }
+    }
+    if(!climbed){pos[axis]=old;break}
+   }}}
   const swimming=isUnderwater(get,pos.x,pos.y+.8,pos.z);
   const supported=vy<=0&&collision(pos.clone().add(new THREE.Vector3(0,-.05,0)));
   if(keys.Space&&supported){vy=8.2;grounded=false;}
